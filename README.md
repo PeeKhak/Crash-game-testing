@@ -1,4 +1,6 @@
-# Crash-game-testing
+# Crash-game
+# Credit By PeeKhak
+#for testing
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -118,6 +120,11 @@
         let particles = [];
         let showLoseMessage = false;
         let loseMessageTimer = 0;
+        let showWinMessage = false;
+        let winMessageTimer = 0;
+        let winMessageText = '';
+        let countdown = 0;
+        let countdownTimer = 0;
 
         // Pixel-art cruiser sprite (16x16)
         const cruiserSprite = [
@@ -158,7 +165,7 @@
                 p.x += p.vx;
                 p.y += p.vy;
                 p.life--;
-        });
+            });
         }
 
         function drawPixelArt(sprite, x, y, scale, crashed = false) {
@@ -179,7 +186,7 @@
         function drawSea() {
             ctx.fillStyle = '#4682b4';
             ctx.fillRect(0, 50, canvas.width, canvas.height - 50);
-            ctx.fillStyle = '#5f9ea5';
+            ctx.fillStyle = '#5f9ea0';
             for (let x = 0; x < canvas.width; x += 10) {
                 let waveHeight = Math.sin((x + seaOffset) * 0.05) * 5;
                 ctx.fillRect(x, 50 + waveHeight, 10, 10);
@@ -194,6 +201,16 @@
             });
         }
 
+        function drawCountdown() {
+            if (countdown > 0) {
+                ctx.font = '24px "Press Start 2P", monospace';
+                ctx.fillStyle = '#ffffff';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(countdown.toString(), canvas.width / 2, canvas.height / 2);
+            }
+        }
+
         function drawLoseMessage() {
             if (showLoseMessage) {
                 ctx.font = '24px "Press Start 2P", monospace';
@@ -204,29 +221,53 @@
             }
         }
 
+        function drawWinMessage() {
+            if (showWinMessage) {
+                ctx.font = '16px "Press Start 2P", monospace';
+                ctx.fillStyle = '#2ecc71';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(winMessageText, canvas.width / 2, canvas.height / 2);
+            }
+        }
+
         function render() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             drawSea();
-            if (!isCrashed) {
+            if (!isCrashed && countdown === 0) {
                 drawPixelArt(cruiserSprite, shipX, shipY, 3, isCrashed);
             }
             drawParticles();
             drawLoseMessage();
+            drawWinMessage();
+            drawCountdown();
         }
 
         function getRandomCrashPoint() {
-            // Adjusted for ~25% win rate: bias toward lower crash points
             const r = Math.random();
-            // Use a steeper exponential distribution to make crashes more likely below 2x
-            return Math.max(1, -Math.log(r) * 0.8); // Adjusted to increase crash frequency
+            return Math.max(1, -Math.log(r) * 3.5); // ~70% win rate with big win potential
         }
 
         function updateMultiplier() {
+            if (countdown > 0) {
+                countdownTimer--;
+                if (countdownTimer <= 0) {
+                    countdown--;
+                    countdownTimer = 50; // 1 second at ~50fps
+                    if (countdown === 0) {
+                        cashoutBtn.disabled = false; // Enable cashout after countdown
+                    }
+                }
+                render();
+                animationFrame = requestAnimationFrame(updateMultiplier);
+                return;
+            }
+
             if (!gameRunning) return;
-            currentMultiplier += 0.02;
+            currentMultiplier += 0.01; // Slow multiplier increase
             multiplierDisplay.textContent = `${currentMultiplier.toFixed(2)}x`;
 
-            shipX = 10 + (currentMultiplier - 1) * 50;
+            shipX = 10 + (currentMultiplier - 1) * 50; // Fixed missing parenthesis
             if (isCrashed) {
                 shipY += 2;
                 if (shipY > 80) shipY = 80;
@@ -237,6 +278,11 @@
                 if (loseMessageTimer <= 0) showLoseMessage = false;
             }
 
+            if (showWinMessage) {
+                winMessageTimer--;
+                if (winMessageTimer <= 0) showWinMessage = false;
+            }
+
             updateParticles();
             render();
 
@@ -244,7 +290,7 @@
                 gameRunning = false;
                 isCrashed = true;
                 showLoseMessage = true;
-                loseMessageTimer = 25; // ~500ms at 50fps
+                loseMessageTimer = 25; // ~500ms at ~50fps
                 createExplosion(shipX, shipY);
                 statusDisplay.textContent = `Crashed at ${crashPoint.toFixed(2)}x!`;
                 cashoutBtn.disabled = true;
@@ -274,37 +320,43 @@
             currentMultiplier = 1;
             crashPoint = getRandomCrashPoint();
             multiplierDisplay.textContent = '1.00x';
-            statusDisplay.textContent = `Play ${playCount}: Running...`;
-            cashoutBtn.disabled = false;
+            statusDisplay.textContent = `Play ${playCount}: Starting...`;
+            cashoutBtn.disabled = true;
             startBtn.disabled = true;
             shipX = 10;
             shipY = 60;
             isCrashed = false;
             particles = [];
             showLoseMessage = false;
+            showWinMessage = false;
+            countdown = 3;
+            countdownTimer = 50; // 1 second per countdown number
 
-            // Auto-cashout tuned for ~25% win rate
-            const autoCashout = crashPoint < 1.5 ? crashPoint - 0.01 : Math.min(
-                1.5 + Math.random() * 0.5, // Bias toward lower cashouts
+            const autoCashout = crashPoint < 2 ? crashPoint - 0.01 : Math.min(
+                2 + Math.random() * 3, // Cash out between 2x and 5x
                 crashPoint - 0.01
             );
             setTimeout(() => {
                 if (gameRunning && currentMultiplier < crashPoint) {
                     cashOut(autoCashout);
                 }
-            }, (autoCashout - 1) * 1000 / 0.02);
+            }, (autoCashout - 1) * 1000 / 0.01 + 3000); // Adjust for countdown delay
+
             animationFrame = requestAnimationFrame(updateMultiplier);
         }
 
         function cashOut(cashoutPoint) {
-            if (!gameRunning) return;
+            if (!gameRunning || currentMultiplier >= crashPoint) return;
             gameRunning = false;
             cancelAnimationFrame(animationFrame);
+            const winnings = Math.floor(currentBet * currentMultiplier);
             statusDisplay.textContent = `Cashed out at ${currentMultiplier.toFixed(2)}x!`;
             cashoutBtn.disabled = true;
-            const winnings = Math.floor(currentBet * currentMultiplier);
             coins += winnings;
             coinsDisplay.textContent = `Coins: ${coins}`;
+            winMessageText = `WIN! +${winnings} coins`;
+            showWinMessage = true;
+            winMessageTimer = 25; // ~500ms at ~50fps
             results.push(`Play ${playCount}: Cashed out at ${currentMultiplier.toFixed(2)}x (+${winnings} coins)`);
             updateResults();
             setTimeout(nextPlay, 1000);
