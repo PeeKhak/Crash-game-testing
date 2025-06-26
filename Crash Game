@@ -22,33 +22,42 @@
             border-radius: 10px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
             text-align: center;
-            width: 640px; /* Increased from 320px */
+            width: 640px;
         }
         #multiplier {
-            font-size: 2.5em; /* Slightly larger for readability */
+            font-size: 2.5em;
             color: #333;
             margin: 10px 0;
+            transition: transform 0.5s ease-in-out;
+        }
+        #multiplier.glow {
+            animation: glow 1.5s ease-in-out infinite;
+        }
+        @keyframes glow {
+            0% { transform: scale(1); text-shadow: 0 0 5px #3498db, 0 0 10px #3498db; }
+            50% { transform: scale(1.1); text-shadow: 0 0 10px #3498db, 0 0 20px #3498db; }
+            100% { transform: scale(1); text-shadow: 0 0 5px #3498db, 0 0 10px #3498db; }
         }
         #status {
-            font-size: 1.5em; /* Slightly larger */
+            font-size: 1.5em;
             color: #e74c3c;
             margin: 10px 0;
         }
         #coins {
-            font-size: 1.5em; /* Slightly larger */
+            font-size: 1.5em;
             color: #2ecc71;
             margin: 10px 0;
         }
         #results {
             margin-top: 20px;
             text-align: left;
-            max-height: 300px; /* Increased for larger container */
+            max-height: 300px;
             overflow-y: auto;
             border-top: 1px solid #ccc;
             padding-top: 10px;
         }
         button {
-            padding: 12px 24px; /* Slightly larger buttons */
+            padding: 12px 24px;
             font-size: 1.2em;
             cursor: pointer;
             background-color: #3498db;
@@ -78,7 +87,7 @@
 <body>
     <div id="game-container">
         <h1>Crash Game</h1>
-        <canvas id="game-canvas" width="600" height="200"></canvas> <!-- Increased from 300x100 -->
+        <canvas id="game-canvas" width="600" height="200"></canvas>
         <div id="multiplier">1.00x</div>
         <div id="status">Waiting...</div>
         <div id="coins">Coins: 100</div>
@@ -111,8 +120,9 @@
         let totalPlays = 10;
         let results = [];
         let seaOffset = 0;
-        let shipX = 20; // Adjusted for larger canvas
-        let shipY = 120; // Adjusted for larger canvas
+        let seaOffsetSecondary = 0;
+        let shipX = 20;
+        let shipY = 120;
         let isCrashed = false;
         let coins = 100;
         let currentBet = 5;
@@ -124,21 +134,34 @@
         let winMessageText = '';
         let countdown = 0;
         let countdownTimer = 0;
+        let animationTime = 0;
+        let stars = [];
 
-        // Pixel-art cruiser sprite (16x16)
+        // Initialize stars
+        for (let i = 0; i < 20; i++) {
+            stars.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * 100,
+                radius: Math.random() * 2 + 1,
+                alpha: Math.random(),
+                twinkleSpeed: Math.random() * 0.02 + 0.01
+            });
+        }
+
+        // New pixel-art cruiser sprite (16x16, inspired by PNGTree cruise ship)
         const cruiserSprite = [
             [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
             [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0],
-            [0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0],
+            [0,0,0,0,0,0,2,2,2,2,0,0,0,0,0,0],
+            [0,0,0,0,0,2,2,2,2,2,2,0,0,0,0,0],
+            [0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0],
+            [0,0,0,0,1,1,1,1,1,1,1,1,1,0,0,0],
             [0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0],
             [0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0],
             [0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-            [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-            [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-            [0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0],
+            [0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
             [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
             [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
             [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
@@ -147,13 +170,14 @@
 
         // Explosion particles
         function createExplosion(x, y) {
-            for (let i = 0; i < 20; i++) { // Increased particles for larger canvas
+            for (let i = 0; i < 30; i++) {
                 particles.push({
-                    x: x + 48, // Adjusted for larger sprite
+                    x: x + 48,
                     y: y + 48,
-                    vx: (Math.random() - 0.5) * 6, // Increased velocity
+                    vx: (Math.random() - 0.5) * 6,
                     vy: (Math.random() - 0.5) * 6,
-                    life: 30 // Slightly longer life
+                    life: 30,
+                    color: ['#ff4500', '#ffff00', '#ff0000'][Math.floor(Math.random() * 3)]
                 });
             }
         }
@@ -172,37 +196,54 @@
             for (let i = 0; i < sprite.length; i++) {
                 for (let j = 0; j < sprite[i].length; j++) {
                     if (sprite[i][j] === 1) {
-                        ctx.fillStyle = crashed ? '#e74c3c' : '#333333';
+                        ctx.fillStyle = crashed ? '#e74c3c' : '#ffffff'; // White body
                         ctx.fillRect(x + j * pixelSize, y + i * pixelSize, pixelSize, pixelSize);
                     } else if (sprite[i][j] === 2) {
-                        ctx.fillStyle = crashed ? '#b22222' : '#ffffff';
+                        ctx.fillStyle = crashed ? '#b22222' : '#00b7eb'; // Blue accents
                         ctx.fillRect(x + j * pixelSize, y + i * pixelSize, pixelSize, pixelSize);
                     }
                 }
             }
         }
 
+        function drawStars() {
+            stars.forEach(star => {
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255, 255, 255, ${star.alpha})`;
+                ctx.fill();
+                star.alpha += star.twinkleSpeed;
+                if (star.alpha > 1 || star.alpha < 0) star.twinkleSpeed = -star.twinkleSpeed;
+            });
+        }
+
         function drawSea() {
             ctx.fillStyle = '#4682b4';
-            ctx.fillRect(0, 100, canvas.width, canvas.height - 100); // Adjusted for larger canvas
+            ctx.fillRect(0, 100, canvas.width, canvas.height - 100);
             ctx.fillStyle = '#5f9ea0';
-            for (let x = 0; x < canvas.width; x += 20) { // Larger waves
-                let waveHeight = Math.sin((x + seaOffset) * 0.025) * 10; // Adjusted for scale
+            for (let x = 0; x < canvas.width; x += 20) {
+                let waveHeight = Math.sin((x + seaOffset) * 0.025) * 10;
                 ctx.fillRect(x, 100 + waveHeight, 20, 20);
             }
-            seaOffset = (seaOffset + 1) % canvas.width; // Faster offset for larger canvas
+            ctx.fillStyle = 'rgba(95, 158, 160, 0.5)';
+            for (let x = 0; x < canvas.width; x += 20) {
+                let waveHeight = Math.sin((x + seaOffsetSecondary) * 0.03) * 8;
+                ctx.fillRect(x, 110 + waveHeight, 20, 15);
+            }
+            seaOffset = (seaOffset + 1) % canvas.width;
+            seaOffsetSecondary = (seaOffsetSecondary + 1.5) % canvas.width;
         }
 
         function drawParticles() {
-            ctx.fillStyle = '#ff4500';
             particles.forEach(p => {
-                ctx.fillRect(p.x, p.y, 8, 8); // Larger particles
+                ctx.fillStyle = p.color;
+                ctx.fillRect(p.x, p.y, 8, 8);
             });
         }
 
         function drawCountdown() {
             if (countdown > 0) {
-                ctx.font = '48px "Press Start 2P", monospace'; // Larger font
+                ctx.font = '48px "Press Start 2P", monospace';
                 ctx.fillStyle = '#ffffff';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
@@ -212,8 +253,9 @@
 
         function drawLoseMessage() {
             if (showLoseMessage) {
-                ctx.font = '48px "Press Start 2P", monospace'; // Larger font
-                ctx.fillStyle = '#e74c3c';
+                let scale = 1 + Math.sin(loseMessageTimer * 0.2) * 0.1;
+                ctx.font = `${48 * scale}px "Press Start 2P", monospace`;
+                ctx.fillStyle = `rgba(231, 76, 60, ${loseMessageTimer / 25})`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.fillText('LOSE!', canvas.width / 2, canvas.height / 2);
@@ -222,8 +264,9 @@
 
         function drawWinMessage() {
             if (showWinMessage) {
-                ctx.font = '32px "Press Start 2P", monospace'; // Larger but fits
-                ctx.fillStyle = '#2ecc71';
+                let scale = 1 + Math.sin(winMessageTimer * 0.2) * 0.1;
+                ctx.font = `${32 * scale}px "Press Start 2P", monospace`;
+                ctx.fillStyle = `rgba(46, 204, 113, ${winMessageTimer / 25})`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.fillText(winMessageText, canvas.width / 2, canvas.height / 2);
@@ -232,19 +275,22 @@
 
         function render() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawStars();
             drawSea();
             if (!isCrashed && countdown === 0) {
-                drawPixelArt(cruiserSprite, shipX, shipY, 6, isCrashed); // 6x scale
+                let bob = Math.sin(animationTime * 0.05) * 5;
+                drawPixelArt(cruiserSprite, shipX, shipY + bob, 6, isCrashed);
             }
             drawParticles();
             drawLoseMessage();
             drawWinMessage();
             drawCountdown();
+            animationTime++;
         }
 
         function getRandomCrashPoint() {
             const r = Math.random();
-            return Math.max(1, -Math.log(r) * 3.5); // ~70% win rate
+            return Math.max(1, -Math.log(r) * 3.5);
         }
 
         function updateMultiplier() {
@@ -255,6 +301,7 @@
                     countdownTimer = 50;
                     if (countdown === 0) {
                         cashoutBtn.disabled = false;
+                        multiplierDisplay.classList.add('glow');
                     }
                 }
                 render();
@@ -266,10 +313,10 @@
             currentMultiplier += 0.01;
             multiplierDisplay.textContent = `${currentMultiplier.toFixed(2)}x`;
 
-            shipX = 20 + (currentMultiplier - 1) * 100; // Adjusted for larger canvas
+            shipX = 20 + (currentMultiplier - 1) * 100;
             if (isCrashed) {
-                shipY += 4; // Faster sink
-                if (shipY > 160) shipY = 160; // Adjusted for larger canvas
+                shipY += 4;
+                if (shipY > 160) shipY = 160;
             }
 
             if (showLoseMessage) {
@@ -293,6 +340,7 @@
                 createExplosion(shipX, shipY);
                 statusDisplay.textContent = `Crashed at ${crashPoint.toFixed(2)}x!`;
                 cashoutBtn.disabled = true;
+                multiplierDisplay.classList.remove('glow');
                 coins -= currentBet;
                 coinsDisplay.textContent = `Coins: ${coins}`;
                 results.push(`Play ${playCount}: Crashed at ${crashPoint.toFixed(2)}x (-${currentBet} coins)`);
@@ -351,6 +399,7 @@
             const winnings = Math.floor(currentBet * currentMultiplier);
             statusDisplay.textContent = `Cashed out at ${currentMultiplier.toFixed(2)}x!`;
             cashoutBtn.disabled = true;
+            multiplierDisplay.classList.remove('glow');
             coins += winnings;
             coinsDisplay.textContent = `Coins: ${coins}`;
             winMessageText = `WIN! +${winnings} coins`;
